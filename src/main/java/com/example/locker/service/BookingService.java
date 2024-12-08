@@ -34,9 +34,11 @@ public class BookingService {
     @Autowired
     private FinedRepository finedRepository;
 
+    @Autowired
+    private EmailService emailService;
+
     private static final int MAX_ATTEMPTS = 3;
     private static final double PENALTY_AMOUNT = 25000.00; // Biaya pembebasan locker
-
     private static final double FINED_RATE = 5000.00; // Biaya keterlambatan harian
 
     public List<BookingResponse> createBooking(BookingRequest request) {
@@ -80,6 +82,7 @@ public class BookingService {
 
             Booking savedBooking = bookingRepository.save(booking);
 
+            sendMail(request, savedBooking.getPassword());
             // Create response
             BookingResponse response = new BookingResponse();
             response.setBookingId(savedBooking.getLocker().getLockerId());
@@ -191,5 +194,33 @@ public class BookingService {
                 .password(booking.getPassword())
                 .passwordUsed(booking.getPasswordUsed())
                 .build();
+    }
+
+    private void sendMail(BookingRequest request, String password) {
+        String emailSubject = "Booking Confirmation - Locker Rental";
+        String emailBody = "Dear User,\n\n" +
+                "Your booking has been confirmed. Here are the details:\n" +
+                "Locker IDs: " + request.getLockerIds() + "\n" +
+                "Start Date: " + request.getStartDate() + "\n" +
+                "End Date: " + (request.getEndDate() != null ? request.getEndDate() : "N/A") + "\n" +
+                "Password: " + password + "\n\n" +
+                "Thank you for using our service.\n\nBest regards,\nYour Trusted Partner";
+
+        // Send email
+        String userEmail = getUserEmail(request.getUserId());
+        try{
+            emailService.sendBookingConfirmationEmail(userEmail, emailSubject, emailBody);
+        }catch (Exception e) {
+            System.out.println("Failed to send mail!");
+            e.printStackTrace();
+        }
+
+    }
+
+    private String getUserEmail(Long userId) {
+        // Retrieve user's email from UserRepository
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(404, "User not found"));
+        return user.getEmail();
     }
 }
